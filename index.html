@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=640">
+<title>WAVETABLE CONVERTER</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{--bg:#0a0a0a;--ink:#c8c8c8;--dim:#585858;--faint:#1e1e1e;--mid:#383838;--accent:#e8e8e8;--glow:rgba(200,200,200,0.08);--phosphor:#b0b0b0;}
+html,body{background:var(--bg);color:var(--ink);font-family:"Share Tech Mono",monospace;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:48px 16px 60px;}
+#bgNoise{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.022;mix-blend-mode:screen;}
+.portrait-anchor{position:fixed;top:32px;left:calc(50% - 310px - 96px);z-index:10;}
+.portrait-wrap{position:relative;display:inline-block;cursor:pointer;}
+.portrait-img{width:72px;display:block;opacity:0.70;filter:grayscale(100%) contrast(1.1);border:1px solid var(--faint);transition:opacity 0.2s,border-color 0.2s;}
+.portrait-img:hover{opacity:1;border-color:var(--mid);}
+.portrait-glitch-layer{position:absolute;top:0;left:0;width:100%;pointer-events:none;filter:grayscale(100%) contrast(1.4) brightness(1.3);opacity:0;}
+@keyframes portrait-glitch{0%{clip-path:inset(0 0 100% 0);transform:translate(0,0);}2%{clip-path:inset(30% 0 50% 0);transform:translate(-4px,0);}4%{clip-path:inset(55% 0 20% 0);transform:translate(3px,0);}6%{clip-path:inset(10% 0 75% 0);transform:translate(-2px,1px);}8%,100%{clip-path:inset(0 0 100% 0);transform:translate(0,0);}}
+.portrait-glitch-layer.active{opacity:0.9;animation:portrait-glitch 0.18s steps(1) forwards;}
+.portrait-label{font-size:8px;letter-spacing:0.18em;color:var(--dim);text-align:center;margin-top:5px;cursor:pointer;}
+.panel{position:relative;z-index:1;width:580px;border:1px solid var(--faint);box-shadow:0 0 60px rgba(200,200,200,0.04),inset 0 0 80px rgba(0,0,0,0.4);display:flex;flex-direction:column;}
+.titlebar{border-bottom:1px solid var(--faint);padding:14px 20px 12px;display:flex;justify-content:space-between;align-items:baseline;}
+.title{font-size:13px;letter-spacing:0.28em;color:var(--accent);text-shadow:0 0 14px var(--glow);}
+.subtitle{font-size:9px;letter-spacing:0.18em;color:var(--dim);}
+.drop-zone{margin:24px 24px 0;border:1px solid var(--faint);height:140px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;cursor:pointer;transition:border-color 0.15s;}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--mid);}
+.drop-icon{font-size:22px;color:var(--dim);}
+.drop-label{font-size:10px;letter-spacing:0.2em;color:var(--dim);text-align:center;line-height:1.9;}
+.drop-label span{color:var(--ink);}
+.spec-row{margin:14px 24px 0;display:flex;border:1px solid var(--faint);}
+.spec-cell{flex:1;padding:10px 12px;border-right:1px solid var(--faint);display:flex;flex-direction:column;gap:4px;}
+.spec-cell:last-child{border-right:none;}
+.spec-key{font-size:8px;letter-spacing:0.16em;color:var(--dim);}
+.spec-val{font-size:10px;letter-spacing:0.1em;color:var(--ink);}
+.queue-header{margin:20px 24px 0;display:flex;justify-content:space-between;align-items:baseline;font-size:9px;letter-spacing:0.16em;color:var(--dim);padding-bottom:8px;border-bottom:1px solid var(--faint);}
+.queue-clear{background:none;border:none;color:var(--dim);font-family:"Share Tech Mono",monospace;font-size:9px;cursor:pointer;padding:0;letter-spacing:0.14em;}
+.queue-clear:hover{color:var(--ink);}
+.queue-list{margin:0 24px;max-height:240px;overflow-y:auto;}
+.queue-list::-webkit-scrollbar{width:3px;}
+.queue-list::-webkit-scrollbar-track{background:var(--faint);}
+.queue-list::-webkit-scrollbar-thumb{background:var(--mid);}
+.queue-item{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--faint);font-size:9px;letter-spacing:0.12em;}
+.queue-item:last-child{border-bottom:none;}
+.qi-thumb{width:36px;height:24px;object-fit:cover;opacity:0.55;filter:grayscale(100%);border:1px solid var(--faint);flex-shrink:0;}
+.qi-name{flex:1;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.qi-size{color:var(--dim);flex-shrink:0;}
+.qi-status{flex-shrink:0;width:72px;text-align:right;color:var(--dim);}
+.qi-status.done{color:var(--phosphor);}
+.qi-status.working{color:var(--ink);}
+.qi-status.error{color:#666;}
+.queue-empty{padding:24px 0;font-size:9px;letter-spacing:0.16em;color:var(--dim);text-align:center;}
+.progress-wrap{margin:16px 24px 0;height:2px;background:var(--faint);}
+.progress-fill{height:100%;background:var(--phosphor);width:0%;transition:width 0.2s;box-shadow:0 0 6px var(--glow);}
+.action-row{margin:16px 24px 24px;display:flex;gap:10px;}
+.xbtn{flex:1;background:none;border:1px solid var(--mid);color:var(--dim);font-family:"Share Tech Mono",monospace;font-size:10px;letter-spacing:0.22em;padding:14px 8px;cursor:pointer;transition:border-color 0.15s,color 0.15s,box-shadow 0.15s;}
+.xbtn:disabled{opacity:0.3;cursor:default;pointer-events:none;}
+.xbtn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 16px rgba(200,200,200,0.08);}
+.status-strip{border-top:1px solid var(--faint);padding:8px 20px;font-size:9px;letter-spacing:0.14em;color:var(--dim);display:flex;justify-content:space-between;}
+.status-active{color:var(--ink);}
+.about-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;justify-content:center;align-items:center;}
+.about-overlay.open{display:flex;}
+.about-panel{background:var(--bg);border:1px solid var(--mid);width:500px;max-height:80vh;overflow-y:auto;font-family:"Share Tech Mono",monospace;font-size:11px;color:var(--ink);box-shadow:0 0 60px rgba(200,200,200,0.06);}
+.about-titlebar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--faint);font-size:10px;letter-spacing:0.16em;color:var(--dim);}
+.about-close{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;font-family:inherit;line-height:1;}
+.about-close:hover{color:var(--ink);}
+.about-body{padding:22px 24px 28px;display:flex;gap:22px;}
+.about-portrait{width:80px;flex-shrink:0;filter:grayscale(100%) contrast(1.1);opacity:0.85;border:1px solid var(--faint);align-self:flex-start;}
+.about-text{flex:1;}
+.about-name{font-size:13px;letter-spacing:0.22em;color:var(--accent);margin-bottom:4px;}
+.about-role{font-size:9px;letter-spacing:0.16em;color:var(--dim);margin-bottom:16px;}
+.about-section{margin-bottom:16px;}
+.about-section-title{font-size:9px;letter-spacing:0.18em;color:var(--dim);border-bottom:1px solid var(--faint);padding-bottom:4px;margin-bottom:8px;}
+.about-section-title::before{content:"// ";}
+.about-p{line-height:1.7;color:var(--ink);opacity:0.85;}
+#fileInput{display:none;}
+</style>
+</head>
+<body>
+<canvas id="bgNoise"></canvas>
+<div class="portrait-anchor">
+  <div class="portrait-wrap" id="portraitWrap">
+    <img class="portrait-img" id="portraitImg" alt="">
+    <img class="portrait-glitch-layer" id="portraitGlitch" alt="">
+  </div>
+  <div class="portrait-label" id="portraitLabel">// ABOUT</div>
+</div>
+<div class="about-overlay" id="aboutOverlay">
+  <div class="about-panel">
+    <div class="about-titlebar">
+      <span>DEAF_ANTHROPOLOGIST &middot; about</span>
+      <button class="about-close" id="aboutClose">&times;</button>
+    </div>
+    <div class="about-body">
+      <img class="about-portrait" id="aboutPortrait" alt="">
+      <div class="about-text">
+        <div class="about-name">DEAF_ANTHROPOLOGIST</div>
+        <div class="about-role">artist &middot; sound designer &middot; researcher</div>
+        <div class="about-section"><div class="about-section-title">artist</div>
+        <div class="about-p">Deaf Anthropologist is the sound and research practice of Hamburg-based artist Gaetano Rago. He is researching how the severe sensorineural hearing loss he has lived with since early childhood shapes hearing and perception and combines ethnographic methods with experimental sound design. Working with modified tape machines, looping systems, and custom Max patches, he explores how sound transforms and distorts as it passes through machines, memory, and the brain. He works primarily with dancers and visual artists and is part of the international collective Exposure Therapy, which explores the politics and poetics of auditory experience.</div></div>
+        <div class="about-section"><div class="about-section-title">about this tool</div>
+        <div class="about-p">WAVETABLE CONVERTER is a browser-based batch image-to-wavetable tool. Drop any number of images and receive a 64-frame wavetable WAV for each &mdash; compatible with Ableton Wavetable in Raw mode. Everything runs locally in your browser.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="panel">
+  <div class="titlebar">
+    <span class="title">WAVETABLE CONVERTER</span>
+    <span class="subtitle">batch &middot; img &rarr; wavetable &middot; DEAF_ANTHROPOLOGIST</span>
+  </div>
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-icon">&#8862;</div>
+    <div class="drop-label">drop images here &mdash; any number<br><span>or click to select files</span></div>
+  </div>
+  <div class="spec-row">
+    <div class="spec-cell"><div class="spec-key">format</div><div class="spec-val">16-bit mono WAV</div></div>
+    <div class="spec-cell"><div class="spec-key">frames</div><div class="spec-val">64</div></div>
+    <div class="spec-cell"><div class="spec-key">samples / frame</div><div class="spec-val">1024</div></div>
+    <div class="spec-cell"><div class="spec-key">target</div><div class="spec-val">Ableton &middot; Raw</div></div>
+  </div>
+  <div class="queue-header">
+    <span>// QUEUE &nbsp;<span id="queueCount">0 files</span></span>
+    <button class="queue-clear" id="clearBtn">&times; clear</button>
+  </div>
+  <div class="queue-list" id="queueList"><div class="queue-empty" id="queueEmpty">no files loaded</div></div>
+  <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="action-row">
+    <button class="xbtn" id="convertBtn" disabled>&#8615; CONVERT ALL</button>
+    <button class="xbtn" id="zipBtn" disabled>&#8615; EXPORT AS ZIP</button>
+  </div>
+  <div class="status-strip">
+    <span id="statusMsg">awaiting images</span>
+    <span>DEAF_ANTHROPOLOGIST</span>
+  </div>
+</div>
+<input type="file" id="fileInput" accept="image/*" multiple>
+<script>
+(function() {
+// ── Portrait ──────────────────────────────────
+var P = "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";
+var src = "data:image/jpeg;base64," + P;
+document.getElementById("portraitImg").src = src;
+document.getElementById("portraitGlitch").src = src;
+document.getElementById("aboutPortrait").src = src;
+
+// ── Background noise ──────────────────────────
+var nc = document.getElementById("bgNoise");
+var nx = nc.getContext("2d");
+function resizeNoise(){ nc.width = window.innerWidth; nc.height = window.innerHeight; }
+resizeNoise(); window.addEventListener("resize", resizeNoise);
+function drawNoise(){
+  var id = nx.createImageData(nc.width, nc.height);
+  var d = id.data;
+  for(var i=0;i<d.length;i+=4){var v=Math.random()*255|0;d[i]=d[i+1]=d[i+2]=v;d[i+3]=18;}
+  nx.putImageData(id,0,0); requestAnimationFrame(drawNoise);
+}
+drawNoise();
+
+// ── Portrait glitch ───────────────────────────
+setInterval(function(){
+  var el = document.getElementById("portraitGlitch");
+  el.classList.remove("active"); void el.offsetWidth;
+  el.classList.add("active");
+  el.addEventListener("animationend", function(){ el.classList.remove("active"); }, {once:true});
+}, 1000);
+
+// ── About ─────────────────────────────────────
+function openAbout(){ document.getElementById("aboutOverlay").classList.add("open"); }
+function closeAbout(){ document.getElementById("aboutOverlay").classList.remove("open"); }
+document.getElementById("portraitWrap").addEventListener("click", openAbout);
+document.getElementById("portraitLabel").addEventListener("click", openAbout);
+document.getElementById("aboutClose").addEventListener("click", closeAbout);
+document.getElementById("aboutOverlay").addEventListener("click", function(e){ if(e.target===this) closeAbout(); });
+
+// ── State ─────────────────────────────────────
+var queue = [];
+var busy = false;
+
+// ── Drop zone ─────────────────────────────────
+var dz = document.getElementById("dropZone");
+var fi = document.getElementById("fileInput");
+
+dz.addEventListener("click", function(){ fi.click(); });
+dz.addEventListener("dragover", function(e){ e.preventDefault(); dz.classList.add("drag-over"); });
+dz.addEventListener("dragleave", function(){ dz.classList.remove("drag-over"); });
+dz.addEventListener("drop", function(e){
+  e.preventDefault(); dz.classList.remove("drag-over");
+  addFiles(Array.from(e.dataTransfer.files).filter(function(f){ return f.type.indexOf("image/")===0; }));
+});
+fi.addEventListener("change", function(){ addFiles(Array.from(fi.files)); fi.value=""; });
+
+document.getElementById("clearBtn").addEventListener("click", function(){
+  if(busy) return;
+  queue = [];
+  document.getElementById("progressFill").style.width = "0%";
+  renderQueue(); setStatus("awaiting images");
+});
+document.getElementById("convertBtn").addEventListener("click", function(){ if(!busy) startConvert(false); });
+document.getElementById("zipBtn").addEventListener("click", function(){ if(!busy) startConvert(true); });
+
+// ── Add files ─────────────────────────────────
+function addFiles(files){
+  var added = 0;
+  files.forEach(function(f){
+    var dup = queue.some(function(q){ return q.name===f.name && q.size===f.size; });
+    if(dup) return;
+    var item = {file:f, name:f.name, size:f.size, thumb:null, status:"pending"};
+    queue.push(item);
+    added++;
+    makeThumbnail(item);
+  });
+  if(added) { renderQueue(); setStatus("queue: "+queue.length+" file"+(queue.length!==1?"s":"")+" loaded"); }
+}
+
+function makeThumbnail(item){
+  var r = new FileReader();
+  r.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var cv = document.createElement("canvas"); cv.width=72; cv.height=48;
+      cv.getContext("2d").drawImage(img,0,0,72,48);
+      item.thumb = cv.toDataURL("image/jpeg",0.6);
+      renderQueue();
+    };
+    img.src = e.target.result;
+  };
+  r.readAsDataURL(item.file);
+}
+
+// ── Render queue ──────────────────────────────
+function renderQueue(){
+  var list = document.getElementById("queueList");
+  var empty = document.getElementById("queueEmpty");
+  document.getElementById("queueCount").textContent = queue.length+" file"+(queue.length!==1?"s":"");
+  if(queue.length===0){
+    list.innerHTML=""; list.appendChild(empty);
+    setButtons(false); return;
+  }
+  list.innerHTML="";
+  queue.forEach(function(item){
+    var row = document.createElement("div"); row.className="queue-item";
+    var th = document.createElement("img"); th.className="qi-thumb";
+    if(item.thumb) th.src=item.thumb; else th.style.visibility="hidden";
+    var nm = document.createElement("div"); nm.className="qi-name"; nm.textContent=item.name;
+    var sz = document.createElement("div"); sz.className="qi-size"; sz.textContent=(item.size/1024).toFixed(0)+" KB";
+    var st = document.createElement("div");
+    st.className="qi-status"+(item.status==="done"?" done":item.status==="working"?" working":item.status==="error"?" error":"");
+    st.textContent=item.status==="done"?"✓ done":item.status==="working"?"…":item.status==="error"?"error":"pending";
+    row.appendChild(th); row.appendChild(nm); row.appendChild(sz); row.appendChild(st);
+    list.appendChild(row);
+  });
+  if(!busy){
+    var hasPending = queue.some(function(q){ return q.status==="pending"||q.status==="error"; });
+    setButtons(hasPending);
+  }
+}
+
+function setButtons(on){
+  document.getElementById("convertBtn").disabled = !on;
+  document.getElementById("zipBtn").disabled = !on;
+}
+
+function setStatus(msg){ document.getElementById("statusMsg").textContent = msg; }
+
+// ── Image → WAV ───────────────────────────────
+function imageToWav(imgData, w, h){
+  var WTSIZE=1024, FRAMES=64, SR=44100, nCh=1, bps=2;
+  var d=imgData.data, frames=[], fy, i;
+  for(fy=0;fy<FRAMES;fy++){
+    var frame=new Float32Array(WTSIZE);
+    var yf=(fy/FRAMES)*h, y0=Math.floor(yf), y1=Math.min(y0+1,h-1), yt=yf-y0;
+    for(i=0;i<WTSIZE;i++){
+      var xf=(i/WTSIZE)*w, x0=Math.floor(xf), x1=Math.min(x0+1,w-1), xt=xf-x0;
+      function lm(y,x){var idx=(y*w+x)*4;return(0.299*d[idx]+0.587*d[idx+1]+0.114*d[idx+2])/255;}
+      frame[i]=((lm(y0,x0)*(1-xt)+lm(y0,x1)*xt)*(1-yt)+(lm(y1,x0)*(1-xt)+lm(y1,x1)*xt)*yt)*2-1;
+    }
+    frames.push(frame);
+  }
+  var peak=0; frames.forEach(function(f){f.forEach(function(s){if(Math.abs(s)>peak)peak=Math.abs(s);});});
+  if(peak>0.001) frames.forEach(function(f){for(var i=0;i<WTSIZE;i++)f[i]/=peak;});
+  var dataLen=WTSIZE*FRAMES*nCh*bps;
+  var ab=new ArrayBuffer(44+dataLen), dv=new DataView(ab);
+  function wr(o,s){for(var i=0;i<s.length;i++)dv.setUint8(o+i,s.charCodeAt(i));}
+  wr(0,"RIFF");dv.setUint32(4,36+dataLen,true);wr(8,"WAVE");
+  wr(12,"fmt ");dv.setUint32(16,16,true);dv.setUint16(20,1,true);
+  dv.setUint16(22,nCh,true);dv.setUint32(24,SR,true);
+  dv.setUint32(28,SR*nCh*bps,true);dv.setUint16(32,nCh*bps,true);dv.setUint16(34,16,true);
+  wr(36,"data");dv.setUint32(40,dataLen,true);
+  var pos=44;
+  frames.forEach(function(frame){
+    for(var i=0;i<WTSIZE;i++){var s=frame[i];dv.setInt16(pos,s<0?s*0x8000:s*0x7FFF,true);pos+=2;}
+  });
+  return ab;
+}
+
+function loadPixels(file){
+  return new Promise(function(resolve,reject){
+    var r=new FileReader();
+    r.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var cv=document.createElement("canvas");cv.width=img.width;cv.height=img.height;
+        cv.getContext("2d").drawImage(img,0,0);
+        resolve({data:cv.getContext("2d").getImageData(0,0,img.width,img.height),w:img.width,h:img.height});
+      };
+      img.onerror=reject; img.src=e.target.result;
+    };
+    r.onerror=reject; r.readAsDataURL(file);
+  });
+}
+
+function baseName(n){ return n.replace(/\.[^\.]+$/,""); }
+
+function triggerDownload(ab, filename){
+  var blob=new Blob([ab],{type:"audio/wav"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
+// ── Convert ───────────────────────────────────
+async function startConvert(asZip){
+  busy=true; setButtons(false);
+  var pending=queue.filter(function(q){return q.status==="pending"||q.status==="error";});
+  var wavBufs=[], done=0, total=queue.length;
+  for(var i=0;i<pending.length;i++){
+    var item=pending[i];
+    item.status="working"; renderQueue();
+    setStatus("converting "+item.name+" …");
+    try{
+      var res=await loadPixels(item.file);
+      var wav=imageToWav(res.data,res.w,res.h);
+      if(asZip){ wavBufs.push({name:"DA_WT_"+baseName(item.name)+".wav",buffer:wav}); }
+      else{ triggerDownload(wav,"DA_WT_"+baseName(item.name)+".wav"); await new Promise(function(r){setTimeout(r,400);}); }
+      item.status="done"; done++;
+    }catch(err){ item.status="error"; console.error(err); }
+    var n=queue.filter(function(q){return q.status==="done"||q.status==="error";}).length;
+    document.getElementById("progressFill").style.width=(n/total*100)+"%";
+    renderQueue();
+  }
+  if(asZip && wavBufs.length>0){
+    setStatus("building ZIP …");
+    var zip=buildZip(wavBufs);
+    var ts=new Date().toISOString().replace(/[:.]/g,"-").slice(0,16);
+    var zblob=new Blob([zip],{type:"application/zip"});
+    var zurl=URL.createObjectURL(zblob);
+    var a=document.createElement("a");
+    a.href=zurl; a.download="DA_WAVETABLES_"+ts+".zip";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(zurl);},1000);
+  }
+  busy=false;
+  setStatus("done · "+done+" wavetable"+(done!==1?"s":"")+" exported");
+  renderQueue();
+}
+
+// ── ZIP builder ───────────────────────────────
+function buildZip(files){
+  var enc=new TextEncoder();
+  function u16(v){var b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,v,true);return b;}
+  function u32(v){var b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,v,true);return b;}
+  var CT=(function(){
+    var t=new Uint32Array(256);
+    for(var i=0;i<256;i++){var c=i;for(var j=0;j<8;j++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c;}
+    return t;
+  })();
+  function crc32(buf){
+    var c=0xFFFFFFFF,a=new Uint8Array(buf);
+    for(var i=0;i<a.length;i++)c=CT[(c^a[i])&0xFF]^(c>>>8);
+    return(c^0xFFFFFFFF)>>>0;
+  }
+  var parts=[],centrals=[],offset=0;
+  files.forEach(function(file){
+    var nb=enc.encode(file.name),data=new Uint8Array(file.buffer);
+    var crc=crc32(file.buffer),sz=data.length;
+    var local=new Uint8Array([0x50,0x4B,0x03,0x04,20,0,0,0,0,0,0,0,0,0,
+      ...u32(crc),...u32(sz),...u32(sz),...u16(nb.length),0,0,...nb]);
+    var central=new Uint8Array([0x50,0x4B,0x01,0x02,20,0,20,0,0,0,0,0,0,0,0,0,
+      ...u32(crc),...u32(sz),...u32(sz),...u16(nb.length),0,0,0,0,0,0,0,0,0,0,...u32(offset),...nb]);
+    parts.push(local,data); centrals.push(central); offset+=local.length+sz;
+  });
+  var cdStart=offset;
+  var cdSize=centrals.reduce(function(s,h){return s+h.length;},0);
+  var eocd=new Uint8Array([0x50,0x4B,0x05,0x06,0,0,0,0,
+    ...u16(files.length),...u16(files.length),...u32(cdSize),...u32(cdStart),0,0]);
+  var all=parts.concat(centrals).concat([eocd]);
+  var total=all.reduce(function(s,p){return s+p.length;},0);
+  var out=new Uint8Array(total),pos=0;
+  all.forEach(function(p){out.set(p,pos);pos+=p.length;});
+  return out.buffer;
+}
+
+})(); // end IIFE
+</script>
+</body>
+</html>
